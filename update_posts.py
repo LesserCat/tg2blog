@@ -13,16 +13,19 @@ POSTS_FILE = f'{DATA_DIR}/posts.json'
 
 async def get_channel_messages(bot, last_message_id):
     messages = []
-    offset_id = last_message_id + 1
+    offset = 0
     limit = 100
 
     while True:
         try:
-            new_messages = await bot.get_chat_history(chat_id=CHANNEL_ID, limit=limit, offset_id=offset_id)
+            new_messages = await bot.get_updates(offset=offset, limit=limit)
             if not new_messages:
                 break
-            messages.extend(new_messages)
-            offset_id = messages[-1].message_id + 1
+            for update in new_messages:
+                if update.channel_post and update.channel_post.chat.id == int(CHANNEL_ID):
+                    if update.channel_post.message_id > last_message_id:
+                        messages.append(update.channel_post)
+            offset = new_messages[-1].update_id + 1
         except BadRequest as e:
             print(f"Error fetching messages: {e}")
             break
