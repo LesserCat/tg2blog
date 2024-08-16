@@ -13,17 +13,20 @@ POSTS_FILE = f'{DATA_DIR}/posts.json'
 
 async def get_channel_messages(bot, last_message_id):
     messages = []
-    current_id = last_message_id + 1
+    offset_id = last_message_id + 1
+    limit = 100
+
     while True:
         try:
-            message = await bot.get_chat(CHANNEL_ID).get_member(BOT_TOKEN).chat.get_messages(current_id)
-            if message:
-                messages.append(message)
-                current_id += 1
-            else:
+            new_messages = await bot.get_chat_history(chat_id=CHANNEL_ID, limit=limit, offset_id=offset_id)
+            if not new_messages:
                 break
-        except BadRequest:
+            messages.extend(new_messages)
+            offset_id = messages[-1].message_id + 1
+        except BadRequest as e:
+            print(f"Error fetching messages: {e}")
             break
+
     return messages
 
 async def process_messages(bot, messages):
