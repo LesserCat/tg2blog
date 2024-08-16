@@ -12,20 +12,22 @@ POSTS_FILE = f'{DATA_DIR}/posts.json'
 
 async def get_channel_messages(bot):
     messages = []
-    offset_id = 0
+    offset = 0
     while True:
-        new_messages = await bot.get_chat_history(chat_id=CHANNEL_ID, limit=100, offset_id=offset_id)
+        new_messages = await bot.get_updates(offset=offset, limit=100)
         if not new_messages:
             break
-        messages.extend(new_messages)
-        offset_id = messages[-1].id - 1
+        for update in new_messages:
+            if update.channel_post and str(update.channel_post.chat.id) == CHANNEL_ID:
+                messages.append(update.channel_post)
+            offset = update.update_id + 1
     return messages
 
 async def process_messages(bot, messages):
     posts = []
     for message in messages:
         post = {
-            'id': message.id,
+            'id': message.message_id,
             'date': message.date.isoformat(),
             'text': message.text or '',
             'images': []
@@ -34,12 +36,12 @@ async def process_messages(bot, messages):
         if message.photo:
             photo = message.photo[-1]
             file = await bot.get_file(photo.file_id)
-            image_path = f'{IMAGE_DIR}/{message.id}.jpg'
+            image_path = f'{IMAGE_DIR}/{message.message_id}.jpg'
             await file.download_to_drive(image_path)
             post['images'].append({
                 'width': photo.width,
                 'height': photo.height,
-                'url': f'/img/tg/{message.id}.jpg'
+                'url': f'/img/tg/{message.message_id}.jpg'
             })
 
         posts.append(post)
