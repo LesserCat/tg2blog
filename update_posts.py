@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 from telegram import Bot
-from telegram.constants import ParseMode
+from telegram.error import BadRequest
 
 BOT_TOKEN = os.environ['BOT_TOKEN']
 CHANNEL_ID = os.environ['CHANNEL_ID']
@@ -11,25 +11,25 @@ DATA_DIR = 'data/tg'
 IMAGE_DIR = 'static/img/tg'
 POSTS_FILE = f'{DATA_DIR}/posts.json'
 
-async def get_new_messages(bot, last_message_id):
+async def get_channel_messages(bot, last_message_id):
     messages = []
-    offset = 0
+    current_id = last_message_id + 1
     while True:
-        updates = await bot.get_updates(offset=offset, limit=100)
-        if not updates:
+        try:
+            message = await bot.get_chat(CHANNEL_ID).get_member(BOT_TOKEN).chat.get_messages(current_id)
+            if message:
+                messages.append(message)
+                current_id += 1
+            else:
+                break
+        except BadRequest:
             break
-        for update in updates:
-            if update.channel_post and str(update.channel_post.chat.id) == CHANNEL_ID:
-                if update.channel_post.message_id > last_message_id:
-                    messages.append(update.channel_post)
-            offset = update.update_id + 1
     return messages
 
 async def process_messages(bot, messages):
     posts = []
     for message in messages:
-        # 使用 parse_entities 来正确处理文本格式
-        text = message.text_html or message.caption_html or ''
+        text = message.text or message.caption or ''
         
         post = {
             'id': message.message_id,
@@ -71,13 +71,14 @@ async def main():
     last_message_id = max([post['id'] for post in existing_posts]) if existing_posts else 0
 
     bot = Bot(token=BOT_TOKEN)
-    new_messages = await get_new_messages(bot, last_message_id)
+    new_messages = await get_channel_messages(bot, last_message_id)
     new_posts = await process_messages(bot, new_messages)
 
     all_posts = existing_posts + new_posts
     all_posts.sort(key=lambda x: x['id'], reverse=True)
 
     save_posts(all_posts)
+    print(f"保存了 {len(new_posts)} 条新消息。总共有 {len(all_posts)} 条消息。")
 
 if __name__ == '__main__':
     asyncio.run(main())
