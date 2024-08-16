@@ -38,12 +38,13 @@ async def process_message(application, message):
     post = {
         'id': message.message_id,
         'date': message.date.isoformat(),
-        'text': message.text or '',
+        'text': '',
         'images': []
     }
 
     if message.text:
-        post['text'] = emoji.demojize(message.text)
+        # 使用 encode 和 decode 来确保正确处理 Unicode 字符
+        post['text'] = message.text.encode('utf-8').decode('utf-8')
 
     if message.photo:
         photo = message.photo[-1]
@@ -72,7 +73,7 @@ async def process_message(application, message):
 
 def update_posts_file(new_posts, deleted_ids):
     if os.path.exists(POSTS_FILE):
-        with open(POSTS_FILE, 'r') as f:
+        with open(POSTS_FILE, 'r', encoding='utf-8') as f:
             existing_posts = json.load(f)
     else:
         existing_posts = []
@@ -93,8 +94,8 @@ def update_posts_file(new_posts, deleted_ids):
     unique_posts = {post['id']: post for post in all_posts}.values()
     sorted_posts = sorted(unique_posts, key=lambda x: x['id'], reverse=True)
 
-    with open(POSTS_FILE, 'w') as f:
-        json.dump(sorted_posts, f, indent=2)
+    with open(POSTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(sorted_posts, f, ensure_ascii=False, indent=2)
 
 async def main():
     os.makedirs(DATA_DIR, exist_ok=True)
