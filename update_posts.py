@@ -16,7 +16,6 @@ POSTS_FILE = f'{DATA_DIR}/posts.json'
 async def get_latest_posts(application):
     offset = 0
     posts = []
-    deleted_ids = []
     while True:
         updates = await application.bot.get_updates(offset=offset, limit=100)
         if not updates:
@@ -28,11 +27,8 @@ async def get_latest_posts(application):
             elif update.edited_channel_post and str(update.edited_channel_post.chat.id) == CHANNEL_ID:
                 post = await process_message(application, update.edited_channel_post)
                 posts.append(post)
-            elif update.channel_post is None and update.edited_channel_post is None:
-                # This might be a deletion event
-                deleted_ids.append(update.update_id)
             offset = update.update_id + 1
-    return posts, deleted_ids
+    return posts
 
 async def process_message(application, message):
     post = {
@@ -43,7 +39,6 @@ async def process_message(application, message):
     }
 
     if message.text:
-        # 使用 encode 和 decode 来确保正确处理 Unicode 字符
         post['text'] = message.text.encode('utf-8').decode('utf-8')
 
     if message.photo:
@@ -71,17 +66,23 @@ async def process_message(application, message):
 
     return post
 
-def update_posts_file(new_posts, deleted_ids):
+def update_posts_file(new_posts):
     if os.path.exists(POSTS_FILE):
         with open(POSTS_FILE, 'r', encoding='utf-8') as f:
             existing_posts = json.load(f)
     else:
         existing_posts = []
 
-    # Remove deleted posts
-    existing_posts = [post for post in existing_posts if post['id'] not in deleted_ids]
+    all_posts = existing_posts + new_posts
+    unique_posts = {post['id']: post for post in all_posts}.values()
+    sorted_posts = sorted(unique_posts, key=lambda x: x['id'], reverse=True)
 
-    # Delete associated image files
+    # 检查是否有帖子被删除
+    existing_ids = set(post['id'] for post in existing_posts)
+    current_ids = set(post['id'] for post in sorted_posts)
+    deleted_ids = existing_ids - current_ids
+
+    # 删除相关的图片文件
     for deleted_id in deleted_ids:
         jpg_path = f'{IMAGE_DIR}/{deleted_id}.jpg'
         webp_path = f'{IMAGE_DIR}/{deleted_id}.webp'
@@ -90,10 +91,6 @@ def update_posts_file(new_posts, deleted_ids):
         if os.path.exists(webp_path):
             os.remove(webp_path)
 
-    all_posts = existing_posts + new_posts
-    unique_posts = {post['id']: post for post in all_posts}.values()
-    sorted_posts = sorted(unique_posts, key=lambda x: x['id'], reverse=True)
-
     with open(POSTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(sorted_posts, f, ensure_ascii=False, indent=2)
 
@@ -101,8 +98,8 @@ async def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(IMAGE_DIR, exist_ok=True)
     application = ApplicationBuilder().token(BOT_TOKEN).build()
-    new_posts, deleted_ids = await get_latest_posts(application)
-    update_posts_file(new_posts, deleted_ids)
+    new_posts = await get_latest_posts(application)
+    update_posts_file(new_posts)
 
 if __name__ == '__main__':
     asyncio.run(main())
