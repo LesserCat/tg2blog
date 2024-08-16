@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 from telegram import Bot
+from telegram.constants import ParseMode
 
 BOT_TOKEN = os.environ['BOT_TOKEN']
 CHANNEL_ID = os.environ['CHANNEL_ID']
@@ -27,10 +28,13 @@ async def get_new_messages(bot, last_message_id):
 async def process_messages(bot, messages):
     posts = []
     for message in messages:
+        # 使用 parse_entities 来正确处理文本格式
+        text = message.text_html or message.caption_html or ''
+        
         post = {
             'id': message.message_id,
             'date': message.date.isoformat(),
-            'text': message.text or '',
+            'text': text,
             'images': []
         }
 
